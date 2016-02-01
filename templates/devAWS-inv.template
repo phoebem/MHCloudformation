@@ -1,0 +1,62 @@
+[db_internal]
+$private_db_ip drop_mh_db=true public=false
+
+[nfs_internal]
+$private_nfs_ip
+
+[db_full:children]
+db_internal
+
+[mh_node_internal]
+; Use internal IPs here
+$private_admin_ip mh_node_role="admin"
+$private_engage_ip mh_node_role="engage"
+$workers
+
+[mh_node_admin]
+; Use internal IP here
+$private_admin_ip mh_node_role="admin"
+
+[mh_node_full:children]
+mh_node_internal
+
+[mh_node_internal:vars]
+de_env=devo
+public=false
+vagrant=false
+
+;nfs_mount_source="172.31.240.145:/export/mhdevnas/data"
+nfs_mount_source="$private_nfs_ip:/mnt/ebs/export"
+
+; Use external IP for mh_admin and host name for mh_engage
+mh_admin=$public_admin_ip
+mh_db=$private_db_ip
+
+; Use host name for mh_engage -> debug
+mh_engage=dev-aws-engage-001.dce.harvard.edu
+mh_wowza=192.168.100.160
+mh_wowza_app=matterhorn-engage
+
+; cloudfront distribution domain
+cloudfront_distribution_domain=d10rp3qbaymy7z.cloudfront.net
+
+; confidence monitoring configs - needs trailing /
+mh_captureagent_monitor_url=54.172.92.160/live/
+mh_captureagent_location_url=http://de-test-app2.de-test.harvard.edu:8080/appsvr/captureAgentLocations.json
+
+; live streaming config - student facing - needs trailing /
+mh_livestreaming_url=rtmp://54.164.45.243/live/
+
+; auth service configs
+mh_dce_auth_serviceHost=dev-cm-2.dce.harvard.edu
+mh_dce_auth_redirectLocation=https://dev-cm-2.dce.harvard.edu/login/cas.mhtml
+
+; user tracking configs
+mh_usertracking_authhost=dev-ac-web-1.dce.harvard.edu
+
+[db_update]
+database ansible_ssh_host=$private_db_ip mh_node_role="database"
+
+[mh_node_engage]
+engage ansible_ssh_host=$private_engage_ip mh_node_role="engage" mh_engage=dev-aws-engage-001.dce.harvard.edu
+

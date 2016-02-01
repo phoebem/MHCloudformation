@@ -1,0 +1,178 @@
+{
+"AWSTemplateFormatVersion" : "2010-09-09",
+    "Parameters" : {
+        "prefix": {
+            "Description": "Instance name prefix",
+            "Type": "String",
+            "Default": "provision-stg-"
+        },
+        "zone": {
+            "Description": "Availability zone",
+            "Type": "String",
+            "Default": "us-east-1b",
+            "AllowedValues" : ["us-east-1a","us-east-1b","us-east-1c"]
+        },
+        "subnet": {
+            "Description": "Subnet",
+            "Type": "String",
+            "Default": "subnet-ae1296d9"
+        },
+        "securitygroups": {
+            "Description": "Security Groups",
+            "Type": "CommaDelimitedList",
+            "Default": "sg-9fd629fb"
+        },
+        "engagesecuritygroups": {
+            "Description": "Security Groups",
+            "Type": "CommaDelimitedList",
+            "Default": "sg-877120e3,sg-9fd629fb"
+        }
+    },
+    "Mappings" : {
+        "testElasticIp": {
+            "none":   { "ip": "AWS::NoValue",      "eip": "AWS::NoValue" },
+            "admin":  { "ip": "54.174.177.134",    "eip": "eipalloc-04c48961" },
+            "engage": { "ip": "52.6.239.97",       "eip": "eipalloc-e0c48985" },
+            "db":     { "ip": "52.0.123.113",      "eip":"eipalloc-1809467d" },
+            "build":  { "ip": "52.1.102.82",       "eip": "eipalloc-ed084788" },
+            "worker1":{ "ip": "52.5.129.95",       "eip": "eipalloc-66105f03" },
+            "worker2":{ "ip": "52.7.93.225",       "eip": "eipalloc-83125fe6" }
+        },
+        "ElasticIp": { 
+            "none":   { "ip": "AWS::NoValue",      "eip": "AWS::NoValue" },
+            "db":   { "ip": "AWS::NoValue",      "eip": "none" },
+            "engage": { "ip":"54.164.189.55", "eip":"eipalloc-33be0656" },
+            "admin": { "ip":"54.85.122.143", "eip":"eipalloc-c59628a0" },
+            "worker1": { "ip":"52.6.105.159", "eip":"eipalloc-203c5745" },
+            "worker2": { "ip":"52.6.239.19", "eip":"eipalloc-243c5741" },
+            "worker3": { "ip":"52.6.204.84", "eip":"eipalloc-5a3c573f" },
+            "worker4": { "ip":"52.7.12.171", "eip":"eipalloc-373c5752" },
+            "worker5": { "ip":"52.6.104.58", "eip":"eipalloc-503c5735" },
+            "worker6": { "ip":"52.5.98.44", "eip":"eipalloc-2a3c574f" },
+            "worker7": { "ip":"52.6.162.176", "eip":"eipalloc-173c5772" },
+            "worker8": { "ip":"52.6.61.190", "eip":"eipalloc-0c3c5769" },
+            "worker9": { "ip":"52.5.226.34", "eip":"eipalloc-093c576c" },
+            "worker10": { "ip":"52.1.139.3", "eip":"eipalloc-313c5754" }
+        } 
+      },
+
+    "Resources" : {
+        "admin" : {
+           "Type" : "AWS::CloudFormation::Stack",
+           "Properties" : {
+               "TemplateURL" : "https://s3-external-1.amazonaws.com/phoebe_bucket/cf15",
+               "Parameters" : {
+                   "instanceType": "c3.8xlarge",
+                   "subnet": { "Ref": "subnet" },
+                   "securitygroups": { "Fn::Join" : [",", { "Ref":  "securitygroups" }] },
+                   "zone": { "Ref" : "zone" },
+                   "nodeType" : "admin",
+                   "eipId" : { "Fn::FindInMap" : [ "ElasticIp", "admin", "eip" ] }
+               }
+           }
+       },
+        "engage" : {
+           "Type" : "AWS::CloudFormation::Stack",
+           "Properties" : {
+               "TemplateURL" : "https://s3-external-1.amazonaws.com/phoebe_bucket/cf15",
+               "Parameters" : {
+                   "instanceType": "c3.8xlarge",
+                   "subnet": { "Ref": "subnet" },
+                   "securitygroups": { "Fn::Join" : [",", { "Ref":  "engagesecuritygroups" }] },
+                   "zone": { "Ref" : "zone" },
+                   "nodeType" : "engage",
+                   "eipId" : { "Fn::FindInMap" : [ "ElasticIp", "engage", "eip" ] }
+               }
+           }
+       },
+        "db" : {
+           "Type" : "AWS::CloudFormation::Stack",
+           "Properties" : {
+               "TemplateURL" : "https://s3-external-1.amazonaws.com/phoebe_bucket/cf15",
+               "Parameters" : {
+                   "instanceType": "m3.2xlarge",
+                   "subnet": { "Ref": "subnet" },
+                   "securitygroups": { "Fn::Join" : [",", { "Ref":  "securitygroups" }] },
+                   "zone": { "Ref" : "zone" },
+                   "nodeType" : "db",
+                   "eipId" : { "Fn::FindInMap" : [ "ElasticIp", "db", "eip" ] }
+               }
+           }
+       },
+        "worker1" : {
+           "Type" : "AWS::CloudFormation::Stack",
+           "Properties" : {
+               "TemplateURL" : "https://s3-external-1.amazonaws.com/phoebe_bucket/cf15",
+               "Parameters" : {
+                   "instanceType": "c3.8xlarge",
+                   "subnet": { "Ref": "subnet" },
+                   "securitygroups": { "Fn::Join" : [",", { "Ref":  "securitygroups" }] },
+                   "zone": { "Ref" : "zone" },
+                   "nodeType" : "worker",
+                   "eipId" : { "Fn::FindInMap" : [ "ElasticIp", "worker1", "eip" ] }
+               }
+           }
+       },
+        "worker2" : {
+           "Type" : "AWS::CloudFormation::Stack",
+           "Properties" : {
+               "TemplateURL" : "https://s3-external-1.amazonaws.com/phoebe_bucket/cf15",
+               "Parameters" : {
+                   "instanceType": "c3.8xlarge",
+                   "subnet": { "Ref": "subnet" },
+                   "securitygroups": { "Fn::Join" : [",", { "Ref":  "securitygroups" }] },
+                   "zone": { "Ref" : "zone" },
+                   "nodeType" : "worker",
+                   "eipId" : { "Fn::FindInMap" : [ "ElasticIp", "worker2", "eip" ] }
+               }
+           }
+       }
+    },
+  "Outputs" : {
+     "engagePublicDNS" : {
+     "Description" : "Public DNS Name of the newly created EC2 engage instance",
+     "Value" : { "Fn::GetAtt" : [ "engage", "Outputs.PublicDNS" ] }
+     },
+
+    "workerPublicIp1" : {
+      "Description" : "Public IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "worker1", "Outputs.PublicIP" ] }
+    },
+    "workerPrivateIp1" : {
+      "Description" : "Private IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "worker1", "Outputs.PrivateIP" ] }
+    },
+    "workerPublicIp2" : {
+      "Description" : "Public IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "worker2", "Outputs.PublicIP" ] }
+    },
+    "workerPrivateIp2" : {
+      "Description" : "Private IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "worker2", "Outputs.PrivateIP" ] }
+    },
+    "dbPublicIp" : {
+      "Description" : "Public IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "db", "Outputs.PublicIP" ] }
+    },
+    "dbPrivateIp" : {
+      "Description" : "Private IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "db", "Outputs.PrivateIP" ] }
+    },
+    "engagePublicIp" : {
+      "Description" : "Public IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "engage", "Outputs.PublicIP" ] }
+    },
+    "engagePrivateIp" : {
+      "Description" : "Private IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "engage", "Outputs.PrivateIP" ] }
+    },
+    "adminPublicIp" : {
+      "Description" : "Public IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "admin", "Outputs.PublicIP" ] }
+    },
+    "adminPrivateIp" : {
+      "Description" : "Private IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "admin", "Outputs.PrivateIP" ] }
+    }
+  }
+}

@@ -1,0 +1,6 @@
+install template/cf15 on an s3 bucket
+in the script, it is phoebe_bucket
+
+Modify the top templates, change phoebe_bucket to whereever it is installed.
+
+

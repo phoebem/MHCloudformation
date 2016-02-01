@@ -1,0 +1,226 @@
+{ "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "MH Node with Elastic IP and ephemeral storage. AMI, extra storage and security group are chosen based on the node type.",
+
+  "Parameters" : {
+    "prefix": {
+        "Description": "Instance name prefix",
+        "Type": "String",
+        "Default": "provision-"
+    },
+    "zone": {
+        "Description": "Availability zone",
+        "Type": "String",
+        "Default": "us-east-1a",
+        "AllowedValues" : ["us-east-1a","us-east-1b","us-east-1c"]
+    },
+    "subnet": {
+        "Description": "Subnet",
+        "Type": "AWS::EC2::Subnet::Id"
+    },
+    "alert": {
+        "Description": "CloudWatch alert SNS",
+        "Type": "String",
+        "Default": "none"
+    },
+    "securitygroups": {
+        "Description": "Security Groups",
+        "Type": "List<AWS::EC2::SecurityGroup::Id>"
+    },
+    "instanceType": {
+        "Description": "c1.medium, or c3.xlarge, etc, ami with ephemeral storage",
+        "Type": "String",
+        "AllowedValues" : [
+            "c1.medium","c1.xlarge","c3.large","c3.xlarge","c3.2xlarge","c3.4xlarge","c3.8xlarge",
+            "i2.xlarge","i2.2xlarge","i2.4xlarge","i2.8xlarge",
+            "m1.small","m1.medium", "m1.large","m1.xlarge",
+            "m2.xlarge","m2.2xlarge","m2.4xlarge","m2.8xlarge",
+            "m3.medium", "m3.large","m3.xlarge","m3.2xlarge",
+            "r3.large","r3.xlarge","r3.2xlarge","r3.4xlarge","r3.8xlarge"]
+    },
+    "nodeType": {
+        "Description": "MH admin, engage, db, or worker",
+        "Type": "String",
+        "Default": "worker",
+        "AllowedValues" : ["admin","engage","worker","db", "build","nfs"]
+    },
+    "eipId": {
+        "Description": "elastic ip allocation id (if none, a new one will be assigned)",
+        "Type": "String",
+        "Default": "none"
+    }
+  },
+
+  "Conditions" : {
+      "CreateWorkerResources" : {"Fn::Equals" : [{"Ref" : "nodeType"}, "worker"]},
+      "CreateEngageResources" : {"Fn::Equals" : [{"Ref" : "nodeType"}, "engage"]},
+      "HasInstanceType" : {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "instanceType"},""]} ]},
+      "HasAlert" : {"Fn::Equals" : [{"Ref" : "alert"}, "none"]},
+      "NotNFS" : {"Fn::Not" : [ {"Fn::Equals" : [{"Ref" : "nodeType"},"nfs"]} ]},
+      "CreateDBResources" : {"Fn::Equals" : [{"Ref" : "nodeType"}, "db"]},
+      "GenerateEIP" : {"Fn::Equals" : [{"Ref" : "eipId"}, "none"]}
+  },
+
+  "Mappings" : {
+    "node": {
+        "admin":  { "AMI": "ami-6e9ecc06", "mtpt": "xvdj", "volsize": 100, "type": "c3.8xlarge" },
+        "engage": { "AMI": "ami-6e9ecc06", "mtpt": "xvdj", "volsize": 100, "type": "c3.8xlarge" },
+        "worker": { "AMI": "ami-6e9ecc06", "mtpt": "xvdj", "volsize": 200, "type": "c3.8xlarge" },
+        "db":     { "AMI": "ami-c6bae8ae", "mtpt": "xvdj", "volsize": 100, "type": "m3.medium" },
+        "build":  { "AMI": "ami-b88cded0", "mtpt": "xvdj", "volsize": 100, "type": "t1.micro" },
+        "nfs":    { "AMI": "ami-64b4e60c", "mtpt": "", "volsize": 0, "type": "m1.large" }
+    }
+  },
+
+  "Resources" : {
+    "NewEIP" : {
+         "Condition": "GenerateEIP",
+         "Type" : "AWS::EC2::EIP",
+         "Properties" : {
+           "Domain" : "vpc"
+         }
+    },
+    "netInterface" : {
+        "Type" : "AWS::EC2::NetworkInterface",
+        "Properties" : {
+              "SubnetId" : { "Ref": "subnet" },
+              "GroupSet" : { "Ref": "securitygroups" },
+              "SourceDestCheck" : "true",
+              "Tags" : [ {"Key" : "Network", "Value" : "Control"}]
+              }
+    },
+    "AssociateControlPort" : {
+      "Type" : "AWS::EC2::EIPAssociation",
+      "Properties" : {
+        "AllocationId" : {
+            "Fn::If" : [
+                "GenerateEIP",
+                { "Fn::GetAtt" : [ "NewEIP", "AllocationId" ]},
+                { "Ref" : "eipId"  }
+            ]
+        },
+        "NetworkInterfaceId" : { "Ref" : "netInterface" }
+      }
+    },
+    "EC2Instance" : {
+      "Type" : "AWS::EC2::Instance",
+      "Properties" : {
+        "InstanceType" : {
+            "Fn::If" : [
+                "HasInstanceType",
+                { "Ref" : "instanceType"  },
+                { "Fn::FindInMap" : [ "node", { "Ref" : "nodeType" }, "type" ]}
+            ]
+        },
+        "KeyName" : "MHProvision-20150611",
+        "ImageId" : { "Fn::FindInMap" : [ "node", { "Ref" : "nodeType" }, "AMI" ]},
+        "AvailabilityZone" : { "Ref" : "zone" },
+        "NetworkInterfaces" : [ {
+                    "NetworkInterfaceId" : { "Ref": "netInterface" },
+                    "DeviceIndex" : "0" 
+                }
+            ],
+        "BlockDeviceMappings" : [
+          {
+            "DeviceName"  : "/dev/sdb",
+            "VirtualName" : "ephemeral0"
+          }
+        ],
+        "Tags" : [
+                { "Key": "Name", "Value": {"Fn::Join" :[ "", [ { "Ref" : "prefix" } , { "Ref" : "nodeType" } ]] }  },
+                { "Key": "ENV", "Value": "DEV" },
+                { "Key": "OU", "Value": "DE" },
+                { "Key": "Owner", "Value": "Ops" },
+                { "Key": "Project", "Value": "MH" },
+                { "Key": "Role", "Value": { "Ref" : "nodeType" }  }
+          ]
+        }     
+    },
+
+    "NewVolume0" : {
+       "Type" : "AWS::EC2::Volume",
+       "Condition": "NotNFS",
+       "Properties" : {
+         "Size" : { "Fn::FindInMap" : [ "node", { "Ref" : "nodeType" }, "volsize" ]},
+         "AvailabilityZone" : { "Fn::GetAtt" : [ "EC2Instance", "AvailabilityZone" ]}
+       }
+     },
+
+     "MountPoint0" : {
+       "Type" : "AWS::EC2::VolumeAttachment",
+       "Condition": "NotNFS",
+       "Properties" : {
+         "InstanceId" : { "Ref" : "EC2Instance" },
+         "VolumeId"  : { "Ref" : "NewVolume0" },
+         "Device" : { "Fn::FindInMap" : [ "node", { "Ref" : "nodeType" }, "mtpt" ]}
+       }
+     },
+
+    "NewVolume1" : {
+       "Type" : "AWS::EC2::Volume",
+       "Condition": "CreateDBResources",
+       "Properties" : {
+         "Size" : "50",
+         "AvailabilityZone" : { "Fn::GetAtt" : [ "EC2Instance", "AvailabilityZone" ]}
+       }
+     },
+
+     "MountPoint1" : {
+       "Type" : "AWS::EC2::VolumeAttachment",
+       "Condition": "CreateDBResources",
+       "Properties" : {
+         "InstanceId" : { "Ref" : "EC2Instance" },
+         "VolumeId"  : { "Ref" : "NewVolume1" },
+         "Device" : "/dev/xvdh"
+       }
+     },
+
+    "Cloudwatch" :  {
+      "Type": "AWS::CloudWatch::Alarm",
+      "Properties": {
+        "AlarmActions": [
+          "arn:aws:sns:us-east-1:281817691112:MH-Prod-AWS-Notify",
+          "arn:aws:automate:us-east-1:ec2:recover"
+        ],
+        "AlarmDescription": "Instance Auto Recovery Alarm",
+        "ComparisonOperator": "GreaterThanOrEqualToThreshold",
+        "Dimensions": [
+          {
+            "Name": "InstanceId",
+            "Value": { "Ref" : "EC2Instance" }
+          }
+        ],
+        "EvaluationPeriods": 2,
+        "MetricName": "StatusCheckFailed_System",
+        "Namespace": "AWS/EC2",
+        "Period": 60,
+        "Statistic": "Minimum",
+        "Threshold": 1
+      }
+    }
+  },
+
+
+  "Outputs" : {
+    "InstanceId" : {
+      "Description" : "InstanceId of the newly created EC2 instance",
+      "Value" : { "Ref" : "EC2Instance" }
+    },
+    "AZ" : {
+      "Description" : "Availability Zone of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "EC2Instance", "AvailabilityZone" ] }
+    },
+    "PublicDNS" : {
+      "Description" : "Public DNSName of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "EC2Instance", "PublicDnsName" ] }
+    },
+    "PublicIP" : {
+      "Description" : "Public IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "EC2Instance", "PublicIp" ] }
+    },
+    "PrivateIP" : {
+      "Description" : "Public IP address of the newly created EC2 instance",
+      "Value" : { "Fn::GetAtt" : [ "EC2Instance", "PrivateIp" ] }
+    }
+  }
+}
